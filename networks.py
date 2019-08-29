@@ -19,9 +19,7 @@ class BasicBlock(nn.Module):
         self.in_maps = in_maps
         self.out_maps = out_maps
         self.conv1 = nn.Conv2d(in_maps, out_maps, (3, 3), stride=1 if not downsample else 2, padding=1)
-        self.bn1 = nn.BatchNorm2d(out_maps)
         self.conv2 = nn.Conv2d(out_maps, out_maps, (3, 3), stride=1, padding=1)
-        self.bn2 = nn.BatchNorm2d(out_maps)
         if downsample:
             self.downsample = nn.Sequential(
                 nn.Conv2d(in_maps, out_maps, (1, 1), stride=2),
@@ -33,8 +31,8 @@ class BasicBlock(nn.Module):
     def forward(self, x):
         identity = x
 
-        out = F.relu(self.bn1(self.conv1(x)))
-        out = F.relu(self.bn2(self.conv2(out)))
+        out = F.relu(self.conv1(x))
+        out = F.relu(self.conv2(out))
 
         if self.downsample is not None:
             identity = self.downsample(identity)
@@ -51,7 +49,6 @@ class ResNet(nn.Module):
         super(ResNet, self).__init__()
 
         self.conv1 = nn.Conv2d(3, 64, (7, 7), stride=2, padding=3)
-        self.bn1 = nn.BatchNorm2d(64)
         self.maxpool1 = nn.MaxPool2d((3, 3), stride=1, padding=1)
 
         self.layer1 = nn.Sequential(
@@ -73,24 +70,36 @@ class ResNet(nn.Module):
             BasicBlock(512, 512),
             BasicBlock(512, 512)
         )
-        self.layer4 = nn.Sequential(
+        self.layer5 = nn.Sequential(
             BasicBlock(512, 1024, downsample=True),
             BasicBlock(1024, 1024),
             BasicBlock(1024, 1024)
         )
         self.flatten = Flatten()
         self.dense1 = nn.Linear(3*3*1024, 1024)
+        self.mu1 = nn.Linear(1024, 1)
+        self.sigma1 = nn.Linear(1024, 1)
+        self.mu2 = nn.Linear(1024, 1)
+        self.sigma2 = nn.Linear(1024, 1)
+        self.mu3 = nn.Linear(1024, 1)
+        self.sigma3 = nn.Linear(1024, 1)
 
     def forward(self, x):
-        out = F.relu(self.bn1(self.conv1(x)))
+        out = F.relu(self.conv1(x))
         out = self.maxpool1(out)
 
         out = self.layer1(out)
         out = self.layer2(out)
         out = self.layer3(out)
         out = self.layer4(out)
+        out = self.layer5(out)
         out = self.flatten(out)
         out = F.relu(self.dense1(out))
-        out = self.dropout(out)
+        mu1 = self.mu1(out)
+        sigma1 = self.sigma1(out)
+        mu2 = self.mu2(out)
+        sigma2 = self.sigma2(out)
+        mu3 = self.mu3(out)
+        sigma3 = self.sigma3(out)
 
-        return out
+        return (mu1, sigma1), (mu2, sigma2), (mu3, sigma3)
